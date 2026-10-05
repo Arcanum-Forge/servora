@@ -34,5 +34,9 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'ledger' => [
+        'base_url' => env('LEDGER_BASE_URL', 'https://ledger.arcanum.test'),
+        'api_key'  => env('LEDGER_API_KEY'),
+]   ,
 
 ];
