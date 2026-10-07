@@ -43,6 +43,11 @@ class MenuItem extends Model
         return $query->where('is_available', true);
     }
 
+    public function scopeWithAvailability($query)
+    {
+        return $query->with('ingredients.activeSupplyImpacts.threatReport');
+    }
+
     /**
      * Dishes the POS can sell right now: switched on, and every recipe
      * ingredient has enough stock for at least one serving.
@@ -54,6 +59,10 @@ class MenuItem extends Model
             ->whereDoesntHave('ingredients', function ($q) {
                 $q->where('menu_item_ingredient.quantity', '>', 0)
                     ->whereColumn('ingredients.stock', '<', 'menu_item_ingredient.quantity');
+            })
+            ->whereDoesntHave('ingredients', function ($q) {
+                $q->where('menu_item_ingredient.quantity', '>', 0)
+                    ->whereHas('supplyImpacts', fn ($s) => $s->blocking());
             });
     }
 
@@ -116,19 +125,26 @@ class MenuItem extends Model
         if (!$this->is_available) {
             return 'Unavailable';
         }
-
+    
+        $supply = $this->supplyDisruption();
+    
+        if ($supply && $supply[0] === SupplyImpact::UNAVAILABLE) {
+            return 'Unavailable';
+        }
+    
         $servings = $this->servings_left;
-
+    
         if ($servings === 0) {
             return 'Unavailable';
         }
-
-        if ($servings !== null && $servings <= self::LOW_SERVINGS) {
+    
+        if ($supply || ($servings !== null && $servings <= self::LOW_SERVINGS)) {
             return 'Low stock';
         }
-
+    
         return 'Available';
     }
+
 
     public function getAvailabilityReasonAttribute(): string
     {
@@ -136,10 +152,20 @@ class MenuItem extends Model
             return 'Turned off manually';
         }
 
+        $supply = $this->supplyDisruption();
+
+        if ($supply && $supply[0] === SupplyImpact::UNAVAILABLE) {
+            return $this->supplyReason('Supply disrupted', $supply);
+        }
+
         $scarcest = $this->scarcestIngredient();
 
         if ($scarcest && $scarcest[0] === 0) {
             return 'Out of ' . $scarcest[1]->name;
+        }
+
+        if ($supply) {
+            return $this->supplyReason('Limited supply', $supply);
         }
 
         if ($scarcest && $scarcest[0] <= self::LOW_SERVINGS) {
@@ -153,4 +179,48 @@ class MenuItem extends Model
     {
         return $this->availability_status !== 'Unavailable';
     }
+    
+    /**
+     * [effect, Ingredient, SupplyImpact] for the worst active supply impact
+     * on this recipe, or null. Ingredients with quantity 0 are ignored, same
+     * as the stock logic.
+     */
+    protected function supplyDisruption(): ?array
+    {
+        $found = null;
+    
+        foreach ($this->ingredients as $ingredient) {
+            if ((float) $ingredient->pivot->quantity <= 0) {
+                continue;
+            }
+    
+            foreach ($ingredient->activeSupplyImpacts as $impact) {
+                $worse = $impact->effect === SupplyImpact::UNAVAILABLE
+                    && ($found[0] ?? null) !== SupplyImpact::UNAVAILABLE;
+    
+                if ($found === null || $worse) {
+                    $found = [$impact->effect, $ingredient, $impact];
+                }
+            }
+        }
+    
+        return $found;
+    }
+    
+    protected function supplyReason(string $label, array $supply): string
+    {
+        [, $ingredient, $impact] = $supply;
+        $title = $impact->threatReport?->title;
+    
+        return "{$label} · {$ingredient->name}" . ($title ? " ({$title})" : '');
+    }
+    
+    /** 'limited' | 'unavailable' | null: the worst active supply disruption on the recipe. */
+    public function getSupplyStatusAttribute(): ?string
+    {
+        return $this->supplyDisruption()[0] ?? null;
+    }
+
+
+
 }

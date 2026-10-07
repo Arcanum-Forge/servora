@@ -57,11 +57,23 @@ return new class extends Migration {
             $table->unsignedBigInteger('ledger_monster_id');
             $table->primary(['ledger_threat_report_id', 'ledger_monster_id']);
         });
-        
+
         Schema::create('ledger_sync_states', function (Blueprint $table) {
             $table->string('resource')->primary();
             $table->timestamp('last_synced_at')->nullable();
             $table->text('last_error')->nullable();
+        });
+
+        Schema::create('supply_impacts', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('ledger_threat_report_id')->index(); // plain column: ledger data is mirrored, no FK
+            $table->foreignId('ingredient_id')->constrained()->cascadeOnDelete();
+            $table->string('effect')->default('limited');                   // limited | unavailable
+            $table->string('note')->nullable();
+            $table->boolean('is_manual')->default(false);
+            $table->timestamp('dismissed_at')->nullable();
+            $table->timestamps();
+            $table->unique(['ledger_threat_report_id', 'ingredient_id']);
         });
     }
 
@@ -76,7 +88,8 @@ return new class extends Migration {
             'ledger_threat_reports',
             'ledger_monsters',
             'ledger_factions',
-            'ledger_kingdoms'
+            'ledger_kingdoms',
+            'supply_impacts'
         ] as $table) {
             Schema::dropIfExists($table);
         }

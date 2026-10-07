@@ -1,5 +1,5 @@
 <?php
-
+//{{-- menu/⚡index/index.php --}}
 use App\Models\AvailabilitySchedule;
 use App\Models\Ingredient;
 use App\Models\Menu;
@@ -12,6 +12,14 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
+use App\Models\LedgerMonster;
+use App\Models\SupplyImpact;
+use App\Services\Ledger\SupplyImpactSuggester;
+
+use App\Models\LedgerThreatReport;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 new class extends Component {
     /* =====================================================================
         Page state
@@ -22,6 +30,9 @@ new class extends Component {
 
     #[Url(as: 'menu')]
     public ?int $selectedMenuId = null;
+
+    #[Url(as: 'ledger')]
+    public string $ledgerTab = 'Threat reports';
 
     public ?int $selectedCategoryId = null;   // section filter inside a menu
 
@@ -61,6 +72,8 @@ new class extends Component {
     public string $ingStock = '0';
     public string $ingThreshold = '0';
 
+    public string $ingMonsterId = '';
+
     /* ---------- Modifier form ---------- */
     public ?int $groupId = null;
     public string $groupName = '';
@@ -88,7 +101,7 @@ new class extends Component {
 
     public function setView(string $view): void
     {
-        abort_unless(in_array($view, ['Menus', 'Categories', 'Items', 'Modifiers', 'Ingredients', 'Availability']), 404);
+        abort_unless(in_array($view, ['Menus', 'Categories', 'Items', 'Modifiers', 'Ingredients', 'Availability', 'Ledger']), 404);
 
         $this->view = $view;
         $this->search = '';
@@ -367,7 +380,7 @@ new class extends Component {
 
     public function createIngredient(): void
     {
-        $this->reset(['ingredientId', 'ingName', 'ingUnit', 'ingStock', 'ingThreshold']);
+        $this->reset(['ingredientId', 'ingName', 'ingUnit', 'ingStock', 'ingThreshold', 'ingMonsterId']);
         $this->resetValidation();
         $this->modal = 'ingredient';
     }
@@ -381,6 +394,7 @@ new class extends Component {
         $this->ingUnit = $ingredient->unit;
         $this->ingStock = (string) (float) $ingredient->stock;
         $this->ingThreshold = (string) (float) $ingredient->low_stock_threshold;
+        $this->ingMonsterId = (string) ($ingredient->ledger_monster_id ?? '');
         $this->resetValidation();
         $this->modal = 'ingredient';
     }
@@ -392,6 +406,7 @@ new class extends Component {
             'ingUnit' => 'required|in:kg,g,L,ml,pcs',
             'ingStock' => 'required|numeric|min:0',
             'ingThreshold' => 'required|numeric|min:0',
+            'ingMonsterId' => 'nullable|integer|exists:ledger_monsters,id',
         ]);
 
         $data = [
@@ -399,11 +414,14 @@ new class extends Component {
             'unit' => $this->ingUnit,
             'stock' => $this->ingStock,
             'low_stock_threshold' => $this->ingThreshold,
+            'ledger_monster_id' => $this->ingMonsterId !== '' ? (int) $this->ingMonsterId : null,
         ];
 
         $this->ingredientId
             ? Ingredient::findOrFail($this->ingredientId)->update($data)
             : Ingredient::create($data);
+
+        app(SupplyImpactSuggester::class)->run();
 
         $this->closeModal();
     }
@@ -602,7 +620,8 @@ new class extends Component {
     {
         $menuId = $this->selectedMenuId;
 
-        $items = MenuItem::with(['category', 'ingredients', 'menus'])
+        $items = MenuItem::with(['category', 'menus'])
+            ->withAvailability()
             ->withCount('orderItems')
             ->when($this->view === 'Menus', fn($q) => $q->whereHas('menus', fn($m) => $m->where('menus.id', $menuId)))
             ->when($this->view === 'Menus' && $this->selectedCategoryId, fn($q) => $q->where('menu_category_id', $this->selectedCategoryId))
@@ -622,7 +641,7 @@ new class extends Component {
     #[Computed]
     public function stats(): array
     {
-        $items = MenuItem::with('ingredients')->get();
+        $items = MenuItem::withAvailability()->get();
 
         return [
             'live' => $this->liveNow->count(),
@@ -635,7 +654,8 @@ new class extends Component {
     #[Computed]
     public function attentionItems()
     {
-        return MenuItem::with(['ingredients', 'category'])
+        return MenuItem::with(['category'])
+            ->withAvailability()
             ->orderBy('name')
             ->get()
             ->filter(fn($i) => $i->availability_status !== 'Available')
@@ -651,7 +671,10 @@ new class extends Component {
     #[Computed]
     public function ingredients()
     {
-        return Ingredient::withCount('items')->orderBy('name')->get();
+        return Ingredient::withCount('items')
+            ->with(['monster', 'activeSupplyImpacts.threatReport', 'dismissedSupplyImpacts.threatReport'])
+            ->orderBy('name')
+            ->get();
     }
 
     #[Computed]
@@ -694,5 +717,77 @@ new class extends Component {
         return $model::where('slug', $slug)->exists()
             ? $slug . '-' . Str::lower(Str::random(4))
             : $slug;
+    }
+
+    public function setImpactEffect(int $id, string $effect): void
+    {
+        abort_unless(in_array($effect, [SupplyImpact::LIMITED, SupplyImpact::UNAVAILABLE], true), 422);
+
+        // is_manual protects the manager's decision from the suggester's pruning.
+        SupplyImpact::findOrFail($id)->update(['effect' => $effect, 'is_manual' => true]);
+    }
+
+    public function dismissImpact(int $id): void
+    {
+        SupplyImpact::findOrFail($id)->update(['dismissed_at' => now(), 'is_manual' => true]);
+    }
+
+    #[Computed]
+    public function ledgerMonsters()
+    {
+        return LedgerMonster::orderBy('name')->get();
+    }
+
+    #[Computed]
+    public function supplyImpacts()
+    {
+        return SupplyImpact::active()
+            ->with(['ingredient.items', 'threatReport'])
+            ->get()
+            ->sortByDesc(fn ($i) => $i->effect === SupplyImpact::UNAVAILABLE)
+            ->values();
+    }
+
+    public function setLedgerTab(string $tab): void
+    {
+        abort_unless(in_array($tab, ['Threat reports', 'Monsters', 'Schema'], true), 404);
+        $this->ledgerTab = $tab;
+    }
+
+    #[Computed]
+    public function ledgerSyncStates()
+    {
+        return DB::table('ledger_sync_states')->get()->keyBy('resource');
+    }
+
+    #[Computed]
+    public function ledgerThreatReports()
+    {
+        return LedgerThreatReport::with('monsters')
+            ->orderByDesc('level_severity')
+            ->orderByDesc('report_number')
+            ->get();
+    }
+
+    /** Which ingredients are sourced from each monster. */
+    #[Computed]
+    public function ingredientsByMonster()
+    {
+        return Ingredient::whereNotNull('ledger_monster_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'ledger_monster_id'])
+            ->groupBy('ledger_monster_id');
+    }
+
+    /** Every impact (including dismissed ones) per report. */
+    #[Computed]
+    public function impactsByReport()
+    {
+        return SupplyImpact::with('ingredient')->get()->groupBy('ledger_threat_report_id');
+    }
+
+    public function restoreImpact(int $id): void
+    {
+        SupplyImpact::findOrFail($id)->update(['dismissed_at' => null]);
     }
 };

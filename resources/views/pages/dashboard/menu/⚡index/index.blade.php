@@ -150,6 +150,33 @@
         </div>
     @endif
 
+    @if ($this->supplyImpacts->isNotEmpty())
+        <div class="rounded-2xl border border-[#E9DCC4] bg-[#FFFDF8] px-4 py-3">
+            <div class="flex items-start gap-3">
+                <x-tabler-alert-triangle class="mt-0.5 h-4 w-4 shrink-0 text-[#9A762B]" />
+
+                <div class="min-w-0 flex-1 text-[#9A762B]">
+                    <p class="text-sm font-medium">Supply notice</p>
+                    <ul class="mt-1 space-y-0.5 text-xs">
+                        @foreach ($this->supplyImpacts->take(3) as $impact)
+                            <li wire:key="notice-{{ $impact->id }}">
+                                <strong class="font-semibold">{{ $impact->threatReport?->title }}:</strong>
+                                {{ $impact->ingredient->name }}
+                                {{ $impact->effect === 'unavailable' ? 'is unavailable.' : 'is in limited supply.' }}
+                            </li>
+                        @endforeach
+                        @if ($this->supplyImpacts->count() > 3)
+                            <li>and {{ $this->supplyImpacts->count() - 3 }} more.</li>
+                        @endif
+                    </ul>
+                </div>
+
+                <button type="button" wire:click="setView('Ingredients')"
+                    class="shrink-0 text-xs font-medium text-[#294936]">Review →</button>
+            </div>
+        </div>
+    @endif
+
 
     {{-- =========================================================
     WORKSPACE NAVIGATION
@@ -165,10 +192,11 @@
                         'Modifiers' => 'adjustments-horizontal',
                         'Ingredients' => 'carrot',
                         'Availability' => 'calendar-check',
+                        'Ledger' => 'database',
                     ] as $tab => $icon)
 
                     <button type="button" wire:key="tab-{{ $tab }}" wire:click="setView('{{ $tab }}')" class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition
-                                        {{ $view === $tab
+                                                {{ $view === $tab
                 ? 'bg-[#294936] text-white shadow-sm'
                 : 'text-[#718076] hover:bg-[#F8FAF6] hover:text-[#294936]' }}">
                         <x-dynamic-component :component="'tabler-' . $icon" class="h-4 w-4" />
@@ -258,12 +286,12 @@
                         @php $ms = $m->displayStatus(); @endphp
 
                         <button type="button" wire:key="menu-{{ $m->id }}" wire:click="selectMenu({{ $m->id }})" class="group w-full rounded-xl p-3 text-left transition
-                                            {{ $selectedMenuId === $m->id ? 'bg-[#E8F0E5]' : 'hover:bg-[#F8FAF6]' }}">
+                                                    {{ $selectedMenuId === $m->id ? 'bg-[#E8F0E5]' : 'hover:bg-[#F8FAF6]' }}">
                             <div class="flex gap-3">
 
                                 <div
                                     class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg
-                                                {{ $selectedMenuId === $m->id ? 'bg-[#294936] text-white' : 'bg-[#F1F4F0] text-[#718076]' }}">
+                                                        {{ $selectedMenuId === $m->id ? 'bg-[#294936] text-white' : 'bg-[#F1F4F0] text-[#718076]' }}">
                                     <x-tabler-notebook class="h-4 w-4" />
                                 </div>
 
@@ -423,7 +451,7 @@
                         <div class="flex gap-2 overflow-x-auto pb-5">
 
                             <button type="button" wire:click="selectCategory(null)" class="shrink-0 rounded-xl border px-4 py-2.5 text-sm font-medium transition
-                                                        {{ $selectedCategoryId === null
+                                                                {{ $selectedCategoryId === null
                     ? 'border-[#294936] bg-[#294936] text-white'
                     : 'border-[#DCE5DC] bg-white text-[#718076] hover:border-[#C8D5C9] hover:bg-[#F8FAF6]' }}">
                                 All
@@ -434,7 +462,7 @@
                                     <button type="button" wire:key="section-{{ $section->id }}"
                                         wire:click="selectCategory({{ $section->id }})"
                                         class="shrink-0 rounded-xl border px-4 py-2.5 text-sm font-medium transition
-                                                                                    {{ $selectedCategoryId === $section->id
+                                                                                                    {{ $selectedCategoryId === $section->id
                                 ? 'border-[#294936] bg-[#294936] text-white'
                                 : 'border-[#DCE5DC] bg-white text-[#718076] hover:border-[#C8D5C9] hover:bg-[#F8FAF6]' }}">
                                         {{ $section->name }}
@@ -488,7 +516,7 @@
                                     @php $status = $item->availability_status; @endphp
 
                                     <div wire:key="dish-{{ $item->id }}" class="group rounded-2xl border p-4 transition
-                                                                                    {{ $status === 'Available'
+                                                                                                    {{ $status === 'Available'
                                 ? 'border-[#DCE5DC] hover:border-[#C8D5C9] hover:bg-[#FCFDFC]'
                                 : 'border-[#E9DCC4] bg-[#FFFDF8] hover:border-[#DCCAA9]' }}">
 
@@ -498,7 +526,7 @@
 
                                                 <div
                                                     class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl
-                                                                                            {{ $status === 'Available' ? 'bg-[#F1E9DF] text-[#7D6048]' : 'bg-[#FFF4DD] text-[#9A762B]' }}">
+                                                                                                            {{ $status === 'Available' ? 'bg-[#F1E9DF] text-[#7D6048]' : 'bg-[#FFF4DD] text-[#9A762B]' }}">
                                                     <x-dynamic-component :component="'tabler-' . ($item->icon ?: 'tools-kitchen-2')"
                                                         class="h-6 w-6" />
                                                 </div>
@@ -879,6 +907,45 @@
                 </button>
             </div>
 
+
+            @if ($this->supplyImpacts->isNotEmpty())
+                <div class="rounded-2xl border border-[#E9DCC4] bg-[#FFFDF8] p-5">
+
+                    <div class="mb-4">
+                        <h3 class="font-semibold text-[#26342A]">Supply notices</h3>
+                        <p class="mt-1 text-sm text-[#718076]">Ledger threat reports that affect your ingredients. Mark as
+                            unavailable to take dishes off the menu, or dismiss.</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        @foreach ($this->supplyImpacts as $impact)
+                            <div wire:key="impact-{{ $impact->id }}"
+                                class="flex flex-col gap-3 rounded-xl border border-[#EDE3CE] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-[#26342A]">{{ $impact->ingredient->name }}</p>
+                                    <p class="mt-1 text-xs text-[#8A958D]">
+                                        {{ $impact->threatReport?->title }} · {{ $impact->threatReport?->level }}
+                                        · affects {{ $impact->ingredient->items->count() }}
+                                        {{ Str::plural('dish', $impact->ingredient->items->count()) }}
+                                    </p>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    <x-supply-effect-toggle :impact="$impact" />
+                                    <button type="button" wire:click="dismissImpact({{ $impact->id }})" class="{{ $iconBtn }}"
+                                        aria-label="Dismiss notice" title="Dismiss">
+                                        <x-tabler-x class="h-4 w-4" />
+                                    </button>
+                                </div>
+
+                            </div>
+                        @endforeach
+                    </div>
+
+                </div>
+            @endif
+
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
                 @forelse ($this->ingredients as $ingredient)
@@ -903,6 +970,26 @@
                         </div>
 
                         <h3 class="mt-4 font-medium text-[#26342A]">{{ $ingredient->name }}</h3>
+                        @if ($ingredient->monster)
+                            <p class="mt-1 text-[11px] text-[#8A958D]">Sourced from {{ $ingredient->monster->name }}</p>
+                        @endif
+                        @foreach ($ingredient->activeSupplyImpacts as $impact)
+                            <div wire:key="card-impact-{{ $impact->id }}"
+                                class="mt-3 rounded-xl border border-[#E9DCC4] bg-[#FFFDF8] p-3">
+                                <p class="mb-2 truncate text-[11px] text-[#9A762B]">{{ $impact->threatReport?->title }}</p>
+                                <x-supply-effect-toggle :impact="$impact" />
+                            </div>
+                        @endforeach
+
+
+                        @foreach ($ingredient->dismissedSupplyImpacts as $impact)
+                            <div wire:key="card-dismissed-{{ $impact->id }}"
+                                class="mt-3 flex items-center justify-between gap-2 rounded-xl border border-[#DCE5DC] bg-[#F8FAF6] px-3 py-2">
+                                <p class="truncate text-[11px] text-[#8A958D]">{{ $impact->threatReport?->title }} · dismissed</p>
+                                <button type="button" wire:click="restoreImpact({{ $impact->id }})"
+                                    class="shrink-0 text-[11px] font-medium text-[#294936]">Restore</button>
+                            </div>
+                        @endforeach
 
                         <p class="mt-1 text-2xl font-semibold text-[#294936]">
                             {{ $fmt($ingredient->stock) }} <span
@@ -920,7 +1007,8 @@
                         </div>
 
                         <p class="mt-2 text-[11px] text-[#9AA69D]">Low at {{ $fmt($ingredient->low_stock_threshold) }}
-                            {{ $ingredient->unit }}</p>
+                            {{ $ingredient->unit }}
+                        </p>
 
                     </div>
 
@@ -1118,6 +1206,183 @@
                 </div>
 
             </div>
+
+        </div>
+
+
+    {{-- =========================================================
+    LEDGER (read-only)
+    ========================================================== --}}
+    @elseif ($view === 'Ledger')
+
+        @php
+            $levelStyle = fn($level) => match ($level) {
+                'Critical' => 'bg-[#FDE8E7] text-[#B94A48]',
+                'Severe' => 'bg-[#FFF4DD] text-[#9A762B]',
+                default => 'bg-[#F1F4F0] text-[#718076]',
+            };
+        @endphp
+
+        <div class="space-y-6">
+
+            <div>
+                <p class="text-xs font-medium uppercase tracking-[0.1em] text-[#8A958D]">Synced from the Ledger</p>
+                <h2 class="mt-1 text-xl font-semibold text-[#26342A]">Ledger data</h2>
+                <p class="mt-1 text-sm text-[#718076]">Read-only. This data is mirrored by
+                    <code>php artisan ledger:sync</code>
+                    and can only be changed in the Ledger.</p>
+            </div>
+
+            {{-- Sync status --}}
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                @foreach (['kingdoms' => 'Kingdoms', 'factions' => 'Factions', 'monsters' => 'Monsters', 'threat-reports' => 'Threat reports'] as $resource => $resourceLabel)
+                    @php $state = $this->ledgerSyncStates->get($resource); @endphp
+                    <div wire:key="sync-{{ $resource }}" class="rounded-2xl border border-[#DCE5DC] bg-white p-4">
+                        <p class="text-xs font-medium uppercase tracking-[0.1em] text-[#8A958D]">{{ $resourceLabel }}</p>
+                        <p class="mt-2 text-sm font-medium text-[#26342A]">
+                            {{ $state?->last_synced_at ? \Illuminate\Support\Carbon::parse($state->last_synced_at)->diffForHumans() : 'Never synced' }}
+                        </p>
+                        @if ($state?->last_error)
+                            <p class="mt-1 truncate text-[11px] text-[#B94A48]" title="{{ $state->last_error }}">
+                                Last error: {{ $state->last_error }}
+                            </p>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+
+            {{-- Sub tabs --}}
+            <div class="overflow-x-auto">
+                <nav
+                    class="inline-flex min-w-max items-center gap-1 rounded-2xl border border-[#DCE5DC] bg-white p-1 shadow-sm">
+                    @foreach (['Threat reports', 'Monsters'] as $sub)
+                        <button type="button" wire:key="ledger-tab-{{ $sub }}" wire:click="setLedgerTab('{{ $sub }}')"
+                            class="rounded-xl px-4 py-2 text-sm font-medium transition
+                                            {{ $ledgerTab === $sub ? 'bg-[#294936] text-white shadow-sm' : 'text-[#718076] hover:bg-[#F8FAF6] hover:text-[#294936]' }}">
+                            {{ $sub }}
+                        </button>
+                    @endforeach
+                </nav>
+            </div>
+
+
+            {{-- ---------- Threat reports ---------- --}}
+            @if ($ledgerTab === 'Threat reports')
+
+                <div class="space-y-3">
+                    @forelse ($this->ledgerThreatReports as $report)
+                        @php
+                            $isLive = in_array($report->status, \App\Models\LedgerThreatReport::LIVE_STATUSES, true);
+                            $impacts = $this->impactsByReport->get($report->id, collect());
+                        @endphp
+
+                        <div wire:key="lr-{{ $report->id }}"
+                            class="rounded-2xl border bg-white p-5 {{ $isLive ? 'border-[#E9DCC4]' : 'border-[#DCE5DC]' }}">
+
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div class="min-w-0">
+                                    <p class="text-[11px] text-[#8A958D]">{{ $report->report_number }}</p>
+                                    <h3 class="font-semibold text-[#26342A]">{{ $report->title }}</h3>
+                                    <p class="mt-1 text-xs text-[#8A958D]">
+                                        {{ $report->type }} · {{ $report->region_name ?? 'Unknown region' }}
+                                    </p>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="rounded-full px-2.5 py-1 text-[10px] font-semibold {{ $levelStyle($report->level) }}">{{ $report->level }}</span>
+                                    <span
+                                        class="rounded-full px-2.5 py-1 text-[10px] font-semibold {{ $isLive ? 'bg-[#E8F0E5] text-[#5E8067]' : 'bg-[#F1F4F0] text-[#718076]' }}">
+                                        {{ $report->status }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            @if ($report->description)
+                                <p class="mt-3 text-sm leading-6 text-[#718076]">{{ $report->description }}</p>
+                            @endif
+
+                            <div class="mt-4 grid gap-4 border-t border-[#EDF0EC] pt-4 sm:grid-cols-2">
+                                <div>
+                                    <p class="text-[11px] uppercase tracking-[0.08em] text-[#9AA69D]">Monsters</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        @forelse ($report->monsters as $monster)
+                                            <span
+                                                class="rounded-lg border border-[#DCE5DC] bg-[#F8FAF6] px-2.5 py-1 text-xs text-[#718076]">{{ $monster->name }}</span>
+                                        @empty
+                                            <span class="text-xs text-[#8A958D]">None linked</span>
+                                        @endforelse
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <p class="text-[11px] uppercase tracking-[0.08em] text-[#9AA69D]">Affects your ingredients</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        @forelse ($impacts as $impact)
+                                            <span
+                                                class="rounded-lg border px-2.5 py-1 text-xs
+                                                                    {{ $impact->dismissed_at ? 'border-[#DCE5DC] bg-[#F1F4F0] text-[#8A958D] line-through' : ($impact->effect === 'unavailable' ? 'border-[#F3C9C7] bg-[#FDE8E7] text-[#B94A48]' : 'border-[#E9DCC4] bg-[#FFF4DD] text-[#9A762B]') }}">
+                                                {{ $impact->ingredient->name }} ·
+                                                {{ $impact->dismissed_at ? 'dismissed' : $impact->effect }}
+                                            </span>
+                                        @empty
+                                            <span class="text-xs text-[#8A958D]">No linked ingredients</span>
+                                        @endforelse
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    @empty
+                        <p class="rounded-2xl border border-dashed border-[#C8D5C9] py-10 text-center text-sm text-[#8A958D]">
+                            No threat reports synced yet. Run <code>php artisan ledger:sync</code>.
+                        </p>
+                    @endforelse
+                </div>
+
+
+                {{-- ---------- Monsters ---------- --}}
+            @elseif ($ledgerTab === 'Monsters')
+
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    @forelse ($this->ledgerMonsters as $monster)
+                        <div wire:key="lm-{{ $monster->id }}" class="rounded-2xl border border-[#DCE5DC] bg-white p-5">
+
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="font-semibold text-[#26342A]">{{ $monster->name }}</h3>
+                                    <p class="mt-0.5 text-xs text-[#8A958D]">
+                                        {{ $monster->classification ?? 'Unknown' }} · {{ $monster->habitat ?? 'Unknown' }}
+                                    </p>
+                                </div>
+                                <span
+                                    class="rounded-full px-2.5 py-1 text-[10px] font-semibold {{ $levelStyle($monster->threat === 'High' || $monster->threat === 'Extreme' ? 'Severe' : '') }}">
+                                    {{ $monster->threat ?? '—' }}
+                                </span>
+                            </div>
+
+                            @if ($monster->description)
+                                <p class="mt-3 line-clamp-3 text-xs leading-5 text-[#718076]">{{ $monster->description }}</p>
+                            @endif
+
+                            <div class="mt-4 border-t border-[#EDF0EC] pt-3">
+                                <p class="text-[11px] uppercase tracking-[0.08em] text-[#9AA69D]">Ingredients sourced</p>
+                                <p class="mt-1 text-xs text-[#718076]">
+                                    {{ $this->ingredientsByMonster->has($monster->id)
+                            ? $this->ingredientsByMonster[$monster->id]->pluck('name')->join(', ')
+                            : 'None linked' }}
+                                </p>
+                            </div>
+
+                        </div>
+                    @empty
+                        <p
+                            class="rounded-2xl border border-dashed border-[#C8D5C9] py-10 text-center text-sm text-[#8A958D] md:col-span-2 xl:col-span-3">
+                            No monsters synced yet.
+                        </p>
+                    @endforelse
+                </div>
+            @endif
 
         </div>
 
@@ -1367,6 +1632,19 @@
                         <div class="sm:col-span-2">
                             <label class="{{ $label }}">Warn me when stock drops to</label>
                             <input type="number" step="0.01" min="0" wire:model="ingThreshold" class="{{ $input }}">
+                        </div>
+
+                        <div class="sm:col-span-2">
+                            <label class="{{ $label }}">Sourced from monster (optional)</label>
+                            <select wire:model="ingMonsterId" class="{{ $input }}">
+                                <option value="">Not monster-sourced</option>
+                                @foreach ($this->ledgerMonsters as $monster)
+                                    <option value="{{ $monster->id }}">{{ $monster->name }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-[11px] text-[#9AA69D]">While a Ledger threat report involving this monster is
+                                active,
+                                dishes using this ingredient show a supply notice.</p>
                         </div>
                     </div>
 

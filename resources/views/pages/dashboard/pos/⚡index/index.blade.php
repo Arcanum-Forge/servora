@@ -28,6 +28,29 @@
         <p class="mt-1 text-sm text-[#718076]">Take orders, adjust quantities and collect payment for a table.</p>
     </div>
 
+
+    @if ($supplyNotices->isNotEmpty())
+        <div class="mb-6 flex items-start gap-3 rounded-2xl border border-[#E5DCC8] bg-[#FBF7EE] px-4 py-3">
+            <x-tabler-alert-triangle class="mt-0.5 h-4 w-4 shrink-0 text-[#9A7B45]" />
+    
+            <div class="min-w-0 text-[#5E4A2F]">
+                <p class="text-sm font-semibold">Supply notice</p>
+                <ul class="mt-1 space-y-0.5 text-xs">
+                    @foreach ($supplyNotices->take(3) as $impact)
+                        <li wire:key="supply-notice-{{ $impact->id }}">
+                            <strong class="font-semibold">{{ $impact->threatReport?->title }}:</strong>
+                            {{ $impact->ingredient->name }}
+                            {{ $impact->effect === 'unavailable' ? 'is unavailable.' : 'is in limited supply.' }}
+                        </li>
+                    @endforeach
+                    @if ($supplyNotices->count() > 3)
+                        <li>and {{ $supplyNotices->count() - 3 }} more.</li>
+                    @endif
+                </ul>
+            </div>
+        </div>
+    @endif
+
     {{-- Hero --}}
     <div class="rounded-3xl bg-[#294936] p-6 text-white sm:p-7">
 
@@ -183,7 +206,6 @@
                         @foreach ($menuItems as $item)
 
                             @php
-                                $lowStock = $item->availability_status === 'Low stock';
                                 $customizable = $item->modifierGroups->isNotEmpty();
                             @endphp
 
@@ -229,7 +251,14 @@
                                                 </span>
                                             @endif
 
-                                            @if ($lowStock)
+                                            @if ($item->supply_status === 'limited')
+                                                <span title="{{ $item->availability_reason }}"
+                                                    class="inline-flex items-center rounded-full bg-[#FFF4DD] px-2.5 py-1 text-[11px] font-semibold text-[#9A762B]">
+                                                    Limited supply
+                                                </span>
+                                            @endif
+
+                                            @if ($item->servings_left !== null && $item->servings_left <= \App\Models\MenuItem::LOW_SERVINGS)
                                                 <span class="inline-flex items-center rounded-full bg-[#FFF4DD] px-2.5 py-1 text-[11px] font-semibold text-[#9A762B]">
                                                     {{ $item->servings_left }} left
                                                 </span>
@@ -280,7 +309,7 @@
                                 <x-tabler-search-off class="h-6 w-6 text-[#8FA58B]" />
                             </div>
                             <p class="mt-3 text-sm font-medium text-[#294936]">No dishes found</p>
-                            <p class="mt-1 text-xs text-[#8FA58B]">Try another search or choose a different category. Dishes that are switched off or out of stock are hidden.</p>
+                            <p class="mt-1 text-xs text-[#8FA58B]">Try another search or choose a different category. Dishes that are switched off, out of stock or affected by a supply disruption are hidden.</p>
 
                             @if (filled($search))
                                 <button type="button" wire:click="$set('search', '')"

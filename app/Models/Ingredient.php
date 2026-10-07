@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Ingredient extends Model
 {
@@ -12,6 +14,7 @@ class Ingredient extends Model
         'unit',
         'stock',
         'low_stock_threshold',
+        'ledger_monster_id',
     ];
 
     protected $casts = [
@@ -52,5 +55,27 @@ class Ingredient extends Model
         }
 
         return (int) min(100, round($stock / ($threshold * 3) * 100));
+    }
+
+    public function monster(): BelongsTo
+    {
+        return $this->belongsTo(LedgerMonster::class, 'ledger_monster_id');
+    }
+
+    public function supplyImpacts(): HasMany
+    {
+        return $this->hasMany(SupplyImpact::class);
+    }
+
+    public function activeSupplyImpacts(): HasMany
+    {
+        return $this->supplyImpacts()->active();
+    }
+
+    public function dismissedSupplyImpacts(): HasMany
+    {
+        return $this->supplyImpacts()
+            ->whereNotNull('dismissed_at')
+            ->whereHas('threatReport', fn ($r) => $r->live());
     }
 }

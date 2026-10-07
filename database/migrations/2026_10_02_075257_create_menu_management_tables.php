@@ -31,6 +31,7 @@ return new class extends Migration {
             $table->string('unit')->default('kg'); // kg, g, L, ml, pcs
             $table->decimal('stock', 10, 2)->default(0);
             $table->decimal('low_stock_threshold', 10, 2)->default(0);
+            $table->unsignedBigInteger('ledger_monster_id')->nullable()->index();
             $table->timestamps();
         });
 

@@ -17,7 +17,7 @@ use App\Models\OrderItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-
+use App\Models\SupplyImpact;
 
 new class extends Component {
     /*
@@ -102,7 +102,8 @@ new class extends Component {
 
         $menuItems = MenuItem::query()
             ->orderable()
-            ->with(['category', 'ingredients', 'modifierGroups'])
+            ->with(['category', 'modifierGroups'])
+            ->withAvailability()      
             ->when(
                 $this->activeCategory !== 'All',
                 fn($query) => $query->whereHas(
@@ -119,6 +120,10 @@ new class extends Component {
             )
             ->orderBy('sort_order')
             ->orderBy('name')
+            ->get();
+
+        $supplyNotices = SupplyImpact::active()
+            ->with(['ingredient', 'threatReport'])
             ->get();
 
         $order = $this->currentOrder();
@@ -171,6 +176,7 @@ new class extends Component {
             'halls' => $halls,
             'pickerTables' => $pickerTables,
             'pickerElements' => $pickerElements,
+            'supplyNotices' => $supplyNotices,
         ]);
     }
 
@@ -346,6 +352,12 @@ new class extends Component {
      */
     protected function addLine(int $menuItemId, int $quantity, array $optionIds, ?string $notes): bool
     {
+        if (!MenuItem::orderable()->whereKey($menuItemId)->exists()) {
+            $this->notice = 'That dish is no longer available.';
+            $this->closePicker();
+
+            return false;
+        }
         try {
             DB::transaction(function () use ($menuItemId, $quantity, $optionIds, $notes) {
                 $order = $this->getOrCreateOrder();
@@ -440,7 +452,7 @@ new class extends Component {
             ->findOrFail($orderItemId);
 
         if (!$this->canServeMore($order, $item->menuItem)) {
-            $this->notice = "No more {$item->menuItem->name} in stock.";
+            $this->notice = "No more {$item->menuItem->name} available.";
 
             return;
         }
@@ -503,6 +515,10 @@ new class extends Component {
      */
     protected function canServeMore(Order $order, MenuItem $menuItem): bool
     {
+        if (!MenuItem::orderable()->whereKey($menuItem->id)->exists()) {
+            return false;
+        }
+        
         $servingsLeft = $menuItem->servings_left;
 
         if ($servingsLeft === null) {
